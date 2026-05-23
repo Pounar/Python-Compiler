@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Python Compiler">
+<meta name="theme-color" content="#02030d">
+<meta name="description" content="Python Compiler — Write, run and share Python code in your browser.">
+<title>Python Compiler</title>
+
+<link rel="manifest" href="data:application/json,%7B%22name%22%3A%22Python+Compiler%22%2C%22short_name%22%3A%22PyCompiler%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%2302030d%22%2C%22theme_color%22%3A%22%2302030d%22%2C%22orientation%22%3A%22portrait%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%3Csvg+xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'+viewBox%3D'0+0+100+100'%3E%3Crect+width%3D'100'+height%3D'100'+rx%3D'20'+fill%3D'%23306998'%2F%3E%3Ctext+y%3D'.9em'+font-size%3D'90'%3E%F0%9F%90%8D%3C%2Ftext%3E%3C%2Fsvg%3E%22%2C%22sizes%22%3A%22any%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D">
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+/* ── Variables ── */
+:root {
+  --bg:      #02030d;
+  --surface: #06070f;
+  --border:  #131525;
+  --border2: #1c1f35;
+  --accent:  #5b7fff;
+  --accent2: #7c3aed;
+  --green:   #22d3a0;
+  --red:     #ff5572;
+  --yellow:  #fbbf24;
+  --text:    #e2e8f0;
+  --muted:   #424d6b;
+  --editor:  #01020a;
+  --out-bg:  #010108;
+}
+
+/* ── Base ── */
+*, *::before, *::after {
+  margin: 0; padding: 0; box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+html { height: 100%; }
+body {
+  font-family: 'Syne', sans-serif;
+  background: var(--bg); color: var(--text);
+  display: flex; flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* ── Header ── */
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px; height: 48px; min-height: 48px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  flex-shrink: 0; z-index: 20;
+  padding-top: env(safe-area-inset-top);
+}
+.logo {
+  display: flex; align-items: center; gap: 9px;
+  font-size: 15px; font-weight: 800; letter-spacing: -0.3px;
+}
+.logo-icon { width: 27px; height: 27px; flex-shrink: 0; }
+.watermark {
+  font-size: 10px; color: rgba(255,255,255,0.28);
+  letter-spacing: 3px; font-weight: 400; white-space: nowrap;
+}
+.watermark b {
+  background: linear-gradient(90deg,#c9a84c,#ffe89a,#c9a84c);
+  background-size: 200%; -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent; background-clip: text;
+  font-weight: 700; animation: shimmer 6s linear infinite;
+}
+@keyframes shimmer { 0%{background-position:0%} 100%{background-position:200%} }
+
+/* ── Desktop button bar (inside output topbar) ── */
+/* ── Mobile button bar (separate row under header) ── */
+.mobile-btn-bar {
+  display: none; /* shown only on mobile via media query */
+  align-items: center; justify-content: space-between;
+  padding: 5px 10px; gap: 5px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  flex-shrink: 0; flex-wrap: nowrap; overflow-x: auto;
+  scrollbar-width: none;
+}
+.mobile-btn-bar::-webkit-scrollbar { display: none; }
+
+/* ── Workspace ── */
+.workspace {
+  display: flex; flex: 1; overflow: hidden; min-height: 0;
+}
+
+/* ── Editor Pane ── */
+.editor-pane {
+  display: flex; flex-direction: column;
+  width: 58%; border-right: 1px solid var(--border);
+  overflow: hidden; background: var(--editor); min-height: 0;
+}
+.pane-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 14px; height: 32px; min-height: 32px;
+  background: #030410; border-bottom: 1px solid var(--border);
+  font-size: 10px; font-weight: 600; letter-spacing: 1px;
+  color: var(--muted); text-transform: uppercase; flex-shrink: 0;
+}
+.editor-wrapper { flex: 1; overflow: hidden; min-height: 0; }
+
+/* ── CodeMirror ── */
+.CodeMirror {
+  height: 100% !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 13px !important; line-height: 21px !important;
+  background: var(--editor) !important;
+}
+.CodeMirror-scroll { overflow-x: hidden !important; overflow-y: auto !important; }
+.CodeMirror-scroll::-webkit-scrollbar { width: 4px; }
+.CodeMirror-scroll::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+.CodeMirror-gutters { background: #030410 !important; border-right: 1px solid #0c0e1e !important; }
+.CodeMirror-linenumber { color: #3a4870 !important; padding: 0 10px !important; }
+.CodeMirror-cursor { border-left: 2px solid var(--accent) !important; }
+.CodeMirror-selected { background: rgba(91,127,255,0.15) !important; }
+.CodeMirror-activeline-background { background: rgba(91,127,255,0.03) !important; }
+
+/* ── Output Pane ── */
+.output-pane {
+  display: flex; flex-direction: column;
+  flex: 1; background: var(--out-bg);
+  overflow: hidden; min-height: 0;
+}
+
+/* ── Output Topbar ── */
+.output-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 36px; min-height: 36px; padding: 0 10px;
+  background: #030410; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.tabs { display: flex; height: 100%; }
+.tab {
+  display: flex; align-items: center; padding: 0 10px;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+  color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent;
+  transition: color 0.15s; user-select: none; touch-action: manipulation;
+}
+.tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.tab.err-tab.active { color: var(--red); border-bottom-color: var(--red); }
+
+.desktop-actions { display: flex; align-items: center; gap: 5px; }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 4px 9px; border-radius: 5px;
+  font-family: 'Syne', sans-serif; font-size: 9px; font-weight: 700;
+  cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  user-select: none; touch-action: manipulation; min-height: 26px;
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border: none; color: #fff;
+}
+.btn-primary:hover { opacity: 0.85; }
+.btn-primary:active, .btn-primary:focus { transform: scale(0.96); outline: none; }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.btn-ghost {
+  background: transparent; border: 1px solid var(--border2); color: var(--muted);
+}
+.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.btn-ghost:active { transform: scale(0.96); }
+.btn-danger:hover { border-color: var(--yellow) !important; color: var(--yellow) !important; }
+
+/* ── Examples overlay (mobile-friendly) ── */
+.ex-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.7); z-index: 500;
+  align-items: flex-end; justify-content: center;
+  backdrop-filter: blur(3px);
+}
+.ex-overlay.open { display: flex; }
+.ex-sheet {
+  background: #0c0d1a; border: 1px solid var(--border2);
+  border-radius: 16px 16px 0 0; width: 100%; max-width: 480px;
+  max-height: 80vh; overflow-y: auto;
+  padding-bottom: env(safe-area-inset-bottom);
+  animation: slideUp 0.2s ease;
+}
+@keyframes slideUp { from{transform:translateY(40px);opacity:0} to{transform:none;opacity:1} }
+.ex-title {
+  padding: 0 20px 12px; font-size: 11px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase; color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.ex-item {
+  padding: 14px 20px; font-size: 14px; font-family: 'JetBrains Mono', monospace;
+  color: var(--text); cursor: pointer; border-bottom: 1px solid var(--border);
+  transition: background 0.1s; touch-action: manipulation;
+  display: flex; align-items: center; gap: 10px;
+}
+.ex-item:last-child { border-bottom: none; }
+.ex-item:active { background: rgba(91,127,255,0.1); }
+.ex-close {
+  padding: 14px 20px; font-size: 13px; color: var(--muted);
+  cursor: pointer; text-align: center; touch-action: manipulation;
+  border-top: 1px solid var(--border); margin-top: 4px;
+}
+
+/* Desktop dropdown (non-mobile) */
+.dd-wrap { position: relative; }
+.dd-menu {
+  display: none; position: absolute; top: calc(100% + 5px); right: 0;
+  background: #0c0d18; border: 1px solid var(--border2); border-radius: 9px;
+  z-index: 300; min-width: 175px; overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.75);
+  animation: fadeIn 0.12s ease;
+}
+@keyframes fadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:none} }
+.dd-menu.open { display: block; }
+.dd-item {
+  padding: 10px 16px; font-size: 12px; font-family: 'JetBrains Mono', monospace;
+  color: var(--muted); cursor: pointer; border-bottom: 1px solid var(--border);
+  transition: all 0.1s; touch-action: manipulation;
+}
+.dd-item:last-child { border-bottom: none; }
+.dd-item:hover, .dd-item:active { background: rgba(91,127,255,0.07); color: var(--text); padding-left: 20px; }
+
+/* ── Output Area ── */
+#output {
+  flex: 1; padding: 14px;
+  overflow-y: auto; overflow-x: hidden;
+  font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 21px;
+  white-space: pre-wrap; word-break: break-word;
+  background: var(--out-bg); color: #fff; min-height: 0;
+  -webkit-overflow-scrolling: touch;
+}
+#output::-webkit-scrollbar { width: 4px; }
+#output::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+.placeholder {
+  height: 100%; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  color: var(--muted); font-size: 11px; font-family: 'JetBrains Mono', monospace;
+  text-align: center; gap: 6px; line-height: 1.8;
+}
+.out-line { display: block; }
+.out-line.ok  { color: #e8eeff; }
+.out-line.err { color: #ff5572; }
+.out-line.sys { color: var(--muted); font-style: italic; }
+/* Terminal error styling */
+.out-line.err-traceback { color: #ff8fa3; font-weight: 700; }
+.out-line.err-file      { color: #a0aec0; }
+.out-line.err-caret     { color: #5b7fff; letter-spacing: 1px; }
+.out-line.err-type      { color: #ff5572; font-weight: 700; font-size: 13.5px; }
+.out-line.err-loc       { color: #fbbf24; }
+
+/* ── Terminal Input ── */
+.t-line { display: flex; align-items: center; white-space: normal; margin: 2px 0; flex-wrap: wrap; }
+.t-prompt { color: var(--green); margin-right: 4px; flex-shrink: 0; }
+.t-input {
+  background: transparent; border: none; outline: none;
+  color: #FFD43B; font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; flex: 1; caret-color: #FFD43B; min-width: 80px;
+}
+
+/* ── Exec Bar ── */
+.exec-bar {
+  display: none; align-items: center; gap: 6px; height: 22px;
+  padding: 0 14px; background: #030410; border-top: 1px solid var(--border);
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted);
+  flex-shrink: 0;
+}
+
+/* ── Status Bar ── */
+.statusbar {
+  display: flex; align-items: center; gap: 14px; height: 22px;
+  padding: 0 14px; background: #020309; border-top: 1px solid var(--border);
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted);
+  flex-shrink: 0;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.s-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); display: inline-block; }
+.s-dot.running { background: var(--yellow); animation: pulse 1s infinite; }
+.s-dot.error   { background: var(--red); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* ── Spinner ── */
+.spin {
+  display: inline-block; width: 10px; height: 10px;
+  border: 2px solid rgba(255,255,255,0.2); border-top-color: #fff;
+  border-radius: 50%; animation: spin 0.65s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Loading Overlay ── */
+#loading-overlay {
+  position: fixed; inset: 0; background: #02030d;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 999; gap: 16px; transition: opacity 0.4s;
+}
+#loading-overlay.hidden { opacity: 0; pointer-events: none; }
+.load-snake { font-size: 48px; animation: bounce 1.2s infinite; }
+@keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+.load-msg { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--muted); }
+.load-bar { width: 200px; height: 3px; background: var(--border2); border-radius: 2px; overflow: hidden; }
+.load-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); animation: ld 2s ease-in-out infinite; }
+@keyframes ld { 0%{width:0%} 60%{width:85%} 100%{width:100%} }
+
+/* ══════════════════════════════
+   MOBILE — Android / iOS
+   ══════════════════════════════ */
+@media (max-width: 768px) {
+
+  body {
+    height: 100dvh;
+    height: -webkit-fill-available;
+  }
+
+  /* Show mobile button bar, hide desktop actions */
+  .mobile-btn-bar { display: flex; }
+  .desktop-actions { display: none !important; }
+
+  /* Workspace stacks vertically */
+  .workspace { flex-direction: column; }
+
+  /* Editor: top 55% */
+  .editor-pane {
+    width: 100%; flex: 55;
+    border-right: none; border-bottom: 1px solid var(--border);
+    min-height: 0;
+  }
+
+  /* Output: bottom 45% */
+  .output-pane { width: 100%; flex: 45; min-height: 0; }
+
+  /* Output topbar on mobile: just tabs, no buttons */
+  .output-topbar { height: 34px; min-height: 34px; padding: 0 8px; }
+  .tab { font-size: 9px; padding: 0 10px; }
+
+  /* Editor header */
+  .pane-header { height: 28px; min-height: 28px; font-size: 9px; padding: 0 10px; }
+
+  /* CodeMirror */
+  .CodeMirror { font-size: 13px !important; line-height: 21px !important; }
+  .CodeMirror-linenumber { font-size: 11px !important; }
+
+  /* Header */
+  header { height: 44px; min-height: 44px; padding: 0 14px; padding-top: env(safe-area-inset-top); }
+  .logo { font-size: 13px; gap: 7px; }
+  .logo-icon { width: 23px; height: 23px; }
+  .watermark { font-size: 9px; letter-spacing: 2px; }
+
+  /* Output */
+  #output { font-size: 12.5px; padding: 10px; line-height: 20px; }
+  .exec-bar { font-size: 9px; height: 20px; padding: 0 10px; }
+
+  /* Hide desktop statusbar */
+  .statusbar { display: none; }
+
+  /* Mobile btn bar buttons */
+  .mobile-btn-bar .btn {
+    font-size: 8.5px; padding: 4px 8px; min-height: 28px; border-radius: 5px;
+  }
+  .mobile-btn-bar .btn-primary { padding: 4px 11px; }
+}
+
+/* Very small phones */
+@media (max-width: 380px) {
+  .watermark { display: none; }
+  .mobile-btn-bar .btn { font-size: 8px; padding: 4px 7px; }
+  .logo { font-size: 12px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="loading-overlay">
+  <div class="load-snake">🐍</div>
+  <div class="load-msg" id="load-msg">Loading Python engine...</div>
+  <div class="load-bar"><div class="load-fill"></div></div>
+</div>
+
+<!-- Header -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 256 255" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="pb" x1="12%" y1="12%" x2="88%" y2="88%">
+            <stop offset="0%" stop-color="#5A9FD4"/><stop offset="100%" stop-color="#306998"/>
+          </linearGradient>
+          <linearGradient id="py" x1="12%" y1="12%" x2="88%" y2="88%">
+            <stop offset="0%" stop-color="#FFD43B"/><stop offset="100%" stop-color="#FFE873"/>
+          </linearGradient>
+        </defs>
+        <path fill="url(#pb)" d="M126.916.072c-64.832 0-60.784 28.115-60.784 28.115l.072 29.128h61.868v8.745H41.631S.145 61.355.145 126.77c0 65.417 36.21 63.097 36.21 63.097h21.61v-30.356s-1.165-36.21 35.632-36.21h61.362s34.475.557 34.475-33.319V33.97S194.67.072 126.916.072zm-34.077 19.574c6.191 0 11.178 4.988 11.178 11.179 0 6.19-4.987 11.178-11.178 11.178-6.19 0-11.178-4.987-11.178-11.178 0-6.19 4.987-11.179 11.178-11.179z"/>
+        <path fill="url(#py)" d="M128.757 254.126c64.832 0 60.784-28.115 60.784-28.115l-.072-29.127H127.6v-8.745h86.441s41.486 4.705 41.486-60.712c0-65.416-36.21-63.096-36.21-63.096h-21.61v30.355s1.165 36.21-35.632 36.21h-61.362s-34.475-.557-34.475 33.32v56.013s-5.235 33.897 62.518 33.897zm34.088-19.574c-6.19 0-11.178-4.987-11.178-11.178 0-6.19 4.987-11.179 11.178-11.179 6.191 0 11.179 4.988 11.179 11.179 0 6.19-4.987 11.178-11.179 11.178z"/>
+      </svg>
+    </div>
+    Python Compiler
+  </div>
+  <span class="watermark">Built by <b>Pounar</b></span>
+</header>
+
+<!-- Mobile-only button bar (under header, above editor) -->
+<div class="mobile-btn-bar" id="mobile-btn-bar">
+  <button class="btn btn-ghost" onclick="openExamples()">☰ Examples</button>
+  <button class="btn btn-ghost" onclick="doUndo()" title="Undo">↩ Undo</button>
+  <button class="btn btn-ghost" onclick="doRedo()" title="Redo">↪ Redo</button>
+  <button class="btn btn-ghost btn-danger" onclick="doReset()">Reset</button>
+  <button class="btn btn-ghost" onclick="doClear()">Clear</button>
+  <button class="btn btn-primary" id="mob-run-btn" onclick="runCode()">▶ Run</button>
+</div>
+
+<!-- Main workspace -->
+<div class="workspace">
+
+  <!-- Editor -->
+  <div class="editor-pane">
+    <div class="pane-header">
+      <span>main.py</span>
+      <span>Python 3</span>
+    </div>
+    <div class="editor-wrapper">
+      <textarea id="code-editor"># Welcome to Python Compiler
+print("This is a Python Compiler, you can write, edit, compile code and develop programs here.")
+</textarea>
+    </div>
+  </div>
+
+  <!-- Output -->
+  <div class="output-pane">
+    <div class="output-topbar">
+      <div class="tabs">
+        <div class="tab active" id="tab-out" onclick="switchTab('out')">Output</div>
+        <div class="tab err-tab"  id="tab-err" onclick="switchTab('err')">Errors</div>
+      </div>
+      <!-- Desktop-only actions -->
+      <div class="actions desktop-actions">
+        <div class="dd-wrap">
+          <button class="btn btn-ghost" onclick="toggleDD(event)">☰ Examples</button>
+          <div class="dd-menu" id="dd-menu">
+            <div class="dd-item" onclick="loadEx('hello')">👋 Hello World</div>
+            <div class="dd-item" onclick="loadEx('fib')">🔢 Fibonacci</div>
+            <div class="dd-item" onclick="loadEx('sort')">📊 Sorting</div>
+            <div class="dd-item" onclick="loadEx('cls')">🧩 Classes</div>
+            <div class="dd-item" onclick="loadEx('inp')">⌨️ Input</div>
+            <div class="dd-item" onclick="loadEx('calc')">🧮 Calculator</div>
+            <div class="dd-item" onclick="loadEx('rock')">✂️ Rock Paper Scissors</div>
+            <div class="dd-item" onclick="loadEx('maze')">🌟 Star Patterns</div>
+            <div class="dd-item" onclick="loadEx('pwd')">🔐 Password Checker</div>
+            <div class="dd-item" onclick="loadEx('times')">📊 Multiplication Table</div>
+          </div>
+        </div>
+        <button class="btn btn-ghost" onclick="doUndo()" title="Undo (Ctrl+Z)">↩ Undo</button>
+        <button class="btn btn-ghost" onclick="doRedo()" title="Redo (Ctrl+Y)">↪ Redo</button>
+        <button class="btn btn-ghost btn-danger" onclick="doReset()">Reset</button>
+        <button class="btn btn-ghost" onclick="doClear()">Clear</button>
+        <button class="btn btn-primary" id="run-btn" onclick="runCode()">▶ Run Code</button>
+      </div>
+    </div>
+
+    <div id="output">
+      <div class="placeholder"><span>🐍</span><span>Loading Python...</span></div>
+    </div>
+
+    <div class="exec-bar" id="exec-bar">
+      <span style="color:var(--green)">✓</span>
+      <span id="exec-text"></span>
+    </div>
+  </div>
+
+</div>
+
+<!-- Status bar (desktop only) -->
+<div class="statusbar">
+  <span class="s-dot" id="s-dot"></span>
+  <span id="s-text">Loading...</span>
+  <span style="flex:1"></span>
+  <span>Lines: <span id="s-lines">3</span></span>
+  <span>Cursor: <span id="s-cursor">1:1</span></span>
+  <span>Ctrl+Enter = Run</span>
+</div>
+
+<!-- Examples overlay (mobile full-screen sheet) -->
+<div class="ex-overlay" id="ex-overlay" onclick="closeExamples(event)">
+  <div class="ex-sheet">
+    <div class="ex-title">Select an Example</div>
+    <div class="ex-item" onclick="loadEx('hello');closeExamples()">👋 Hello World</div>
+    <div class="ex-item" onclick="loadEx('fib');closeExamples()">🔢 Fibonacci</div>
+    <div class="ex-item" onclick="loadEx('sort');closeExamples()">📊 Sorting</div>
+    <div class="ex-item" onclick="loadEx('cls');closeExamples()">🧩 Classes</div>
+    <div class="ex-item" onclick="loadEx('inp');closeExamples()">⌨️ Input</div>
+    <div class="ex-item" onclick="loadEx('calc');closeExamples()">🧮 Calculator</div>
+    <div class="ex-item" onclick="loadEx('rock');closeExamples()">✂️ Rock Paper Scissors</div>
+    <div class="ex-item" onclick="loadEx('maze');closeExamples()">🌟 Star Patterns</div>
+    <div class="ex-item" onclick="loadEx('pwd');closeExamples()">🔐 Password Checker</div>
+    <div class="ex-item" onclick="loadEx('times');closeExamples()">📊 Multiplication Table</div>
+    <div class="ex-close" onclick="closeExamples()">✕ Close</div>
+  </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.27.0/full/pyodide.js"></script>
+<script>
+'use strict';
+
+// ── DOM ──
+const outputEl = document.getElementById('output');
+const sDot     = document.getElementById('s-dot');
+const sText    = document.getElementById('s-text');
+
+// Run buttons (desktop + mobile)
+function getRunBtn() { return document.getElementById('run-btn') || document.getElementById('mob-run-btn'); }
+function setRunBtns(html, disabled) {
+  ['run-btn','mob-run-btn'].forEach(id => {
+    const b = document.getElementById(id);
+    if (!b) return;
+    b.innerHTML = html;
+    b.disabled = disabled;
+  });
+}
+
+// ── CodeMirror ──
+const cm = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
+  mode: 'python', theme: 'dracula',
+  lineNumbers: true, indentUnit: 4, tabSize: 4,
+  indentWithTabs: false, lineWrapping: true,
+  autoCloseBrackets: true, matchBrackets: true,
+  autofocus: false,
+  extraKeys: {
+    'Tab':         cm => cm.replaceSelection('    '),
+    'Ctrl-Enter':  () => runCode(),
+    'Cmd-Enter':   () => runCode(),
+    'Ctrl-Z':      () => doUndo(),
+    'Cmd-Z':       () => doUndo(),
+    'Ctrl-Y':      () => doRedo(),
+    'Cmd-Shift-Z': () => doRedo(),
+    'Cmd-Delete':  cm => {
+      const cur = cm.getCursor();
+      const lastLine = cm.lastLine();
+      if (cur.line === 0 && lastLine === 0) {
+        // Only one line — just clear it
+        cm.deleteLine(0);
+      } else if (cur.line === lastLine) {
+        // Last line — delete it and move cursor to end of previous line
+        cm.replaceRange('', {line: cur.line - 1, ch: cm.getLine(cur.line - 1).length}, {line: cur.line, ch: cm.getLine(cur.line).length});
+        cm.setCursor({line: cur.line - 1, ch: cm.getLine(cur.line - 1).length});
+      } else {
+        // Delete current line (including newline), move cursor to same position on previous line
+        cm.replaceRange('', {line: cur.line, ch: 0}, {line: cur.line + 1, ch: 0});
+        const prevLine = Math.max(0, cur.line - 1);
+        cm.setCursor({line: prevLine, ch: cm.getLine(prevLine).length});
+      }
+    }
+  }
+});
+
+cm.on('change', (_, ch) => {
+  document.getElementById('s-lines').textContent = cm.lineCount();
+  if (ch.origin !== 'setValue') schedSnap();
+});
+cm.on('cursorActivity', () => {
+  const c = cm.getCursor();
+  document.getElementById('s-cursor').textContent = `${c.line+1}:${c.ch+1}`;
+});
+
+// Ctrl/Cmd+Enter globally
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); runCode(); }
+});
+
+// ── Snapshot history (10 levels, code + output) ──
+const MAX_SNAPS = 10;
+let snaps = [], snapIdx = -1, snapTimer = null, isNav = false;
+
+function takeSnap(trimFuture = true) {
+  if (isNav) return;
+  const s = {
+    code: cm.getValue(),
+    out:  outputEl.innerHTML,
+    exec: document.getElementById('exec-bar').style.display
+  };
+  if (snaps.length > 0) {
+    const last = snaps[snapIdx >= 0 ? snapIdx : snaps.length - 1];
+    if (last && last.code === s.code && last.out === s.out) return;
+  }
+  if (trimFuture && snapIdx < snaps.length - 1) snaps = snaps.slice(0, snapIdx + 1);
+  snaps.push(s);
+  if (snaps.length > MAX_SNAPS) snaps.shift();
+  snapIdx = snaps.length - 1;
+}
+
+function schedSnap() {
+  clearTimeout(snapTimer);
+  snapTimer = setTimeout(() => takeSnap(true), 800);
+}
+
+function restoreSnap(idx) {
+  const s = snaps[idx]; if (!s) return;
+  isNav = true;
+  cm.setValue(s.code);
+  outputEl.innerHTML = s.out;
+  document.getElementById('exec-bar').style.display = s.exec;
+  snapIdx = idx; isNav = false;
+  sText.textContent = `State ${idx+1}/${snaps.length}`;
+  setTimeout(() => sText.textContent = 'Ready', 1500);
+  cm.focus();
+}
+
+function doUndo() {
+  clearTimeout(snapTimer); takeSnap(false);
+  if (snapIdx <= 0) { sText.textContent = 'Nothing to undo'; setTimeout(()=>sText.textContent='Ready',1500); cm.focus(); return; }
+  restoreSnap(snapIdx - 1);
+}
+function doRedo() {
+  if (snapIdx >= snaps.length - 1) { sText.textContent = 'Nothing to redo'; setTimeout(()=>sText.textContent='Ready',1500); cm.focus(); return; }
+  restoreSnap(snapIdx + 1);
+}
+
+// ── Tabs ──
+function switchTab(t) {
+  document.getElementById('tab-out').classList.toggle('active', t==='out');
+  document.getElementById('tab-err').classList.toggle('active', t==='err');
+  document.getElementById('tab-err').classList.toggle('err-tab', true);
+}
+
+// ── Examples dropdown (desktop) ──
+function toggleDD(e) {
+  e.stopPropagation();
+  document.getElementById('dd-menu').classList.toggle('open');
+}
+document.addEventListener('click', () => document.getElementById('dd-menu').classList.remove('open'));
+
+// ── Examples overlay (mobile) ──
+function openExamples() {
+  document.getElementById('ex-overlay').classList.add('open');
+}
+function closeExamples(e) {
+  if (!e || e.target === document.getElementById('ex-overlay')) {
+    document.getElementById('ex-overlay').classList.remove('open');
+  }
+}
+
+// ── Example snippets ──
+const EX = {
+  hello: `# Hello World
+print("Hello, World! 🌍")
+print("Welcome to Python Compiler!")`,
+
+  fib: `# Fibonacci sequence
+def fibonacci(n):
+    a, b = 0, 1
+    result = []
+    for _ in range(n):
+        result.append(a)
+        a, b = b, a + b
+    return result
+
+fib = fibonacci(10)
+print("Fibonacci sequence:")
+for i, num in enumerate(fib):
+    print(f"  F({i}) = {num}")`,
+
+  sort: `# Bubble Sort
+data = [64, 34, 25, 12, 22, 11, 90, 3, 47, 58]
+print("Original:", data)
+arr = data.copy()
+n = len(arr)
+for i in range(n):
+    for j in range(0, n-i-1):
+        if arr[j] > arr[j+1]:
+            arr[j], arr[j+1] = arr[j+1], arr[j]
+print("Sorted:  ", arr)`,
+
+  cls: `# Classes & Inheritance
+class Animal:
+    def __init__(self, name, sound):
+        self.name = name
+        self.sound = sound
+    def speak(self):
+        return f"{self.name} says {self.sound}!"
+
+class Dog(Animal):
+    def __init__(self, name):
+        super().__init__(name, "Woof")
+    def fetch(self, item):
+        return f"{self.name} fetches the {item}!"
+
+dog = Dog("Rex")
+cat = Animal("Whiskers", "Meow")
+print(dog.speak())
+print(cat.speak())
+print(dog.fetch("ball"))`,
+
+  inp: `# User Input
+name = input("What is your name? ")
+age  = input("How old are you? ")
+print(f"Hello, {name}!")
+print(f"In 10 years you will be {int(age)+10}!")`,
+
+  calc: `# Calculator
+def calc(a, b, op):
+    if op == '+': return a + b
+    if op == '-': return a - b
+    if op == '*': return a * b
+    if op == '/': return a / b if b != 0 else "Error: division by zero"
+    return "Unknown operator"
+
+n1 = float(input("First number: "))
+op = input("Operator (+, -, *, /): ")
+n2 = float(input("Second number: "))
+print(f"{n1} {op} {n2} = {calc(n1, n2, op)}")`,
+
+  rock: `# ✂️ Rock Paper Scissors
+import random
+
+choices = ['rock', 'paper', 'scissors']
+
+print("🪨📄✂️  Rock Paper Scissors")
+print()
+
+player = input("Your choice (rock/paper/scissors): ").strip().lower()
+if player not in choices:
+    print("Invalid choice!")
+else:
+    computer = random.choice(choices)
+    print(f"Computer chose: {computer}")
+    print()
+    if player == computer:
+        print("🤝 It's a tie!")
+    elif (player=='rock' and computer=='scissors') or \
+         (player=='paper' and computer=='rock') or \
+         (player=='scissors' and computer=='paper'):
+        print("✅ You win!")
+    else:
+        print("❌ Computer wins!")`,
+
+  maze: `# 🌟 Star Pattern Printer
+rows = int(input("Enter number of rows (1-20): "))
+rows = max(1, min(20, rows))
+
+print()
+print("=== Diamond Pattern ===")
+# Upper half
+for i in range(1, rows+1):
+    spaces = ' ' * (rows - i)
+    stars  = '★ ' * i
+    print(spaces + stars)
+# Lower half
+for i in range(rows-1, 0, -1):
+    spaces = ' ' * (rows - i)
+    stars  = '★ ' * i
+    print(spaces + stars)
+
+print()
+print("=== Pyramid ===")
+for i in range(1, rows+1):
+    spaces = ' ' * (rows - i)
+    stars  = '* ' * i
+    print(spaces + stars)
+
+print()
+print("=== Square Border ===")
+for i in range(rows):
+    if i == 0 or i == rows-1:
+        print('█ ' * rows)
+    else:
+        print('█ ' + '  ' * (rows-2) + '█')`,
+
+  pwd: `# 🔐 Password Strength Checker
+import re
+
+def check_password(pwd):
+    score = 0
+    tips  = []
+    if len(pwd) >= 8:  score += 1
+    else: tips.append("Use at least 8 characters")
+    if re.search(r'[A-Z]', pwd): score += 1
+    else: tips.append("Add uppercase letters (A-Z)")
+    if re.search(r'[a-z]', pwd): score += 1
+    else: tips.append("Add lowercase letters (a-z)")
+    if re.search(r'\\d', pwd): score += 1
+    else: tips.append("Add numbers (0-9)")
+    if re.search(r'[!@#$%^&*(),.?\":{}|<>]', pwd): score += 1
+    else: tips.append("Add special characters (!@#$...)")
+    if len(pwd) >= 16: score += 1
+    labels = {1:"Very Weak 🔴",2:"Weak 🟠",3:"Fair 🟡",4:"Good 🔵",5:"Strong 🟢",6:"Very Strong 💪"}
+    return score, labels.get(score,"Very Weak 🔴"), tips
+
+pwd = input("Enter a password to check: ")
+score, label, tips = check_password(pwd)
+print(f"\\nStrength: {label}  ({score}/6)")
+print("─" * 30)
+if tips:
+    print("Tips to improve:")
+    for t in tips: print(f"  • {t}")
+else:
+    print("✅ Excellent password!")`,
+
+  times: `# 📊 Multiplication Table Generator
+n = int(input("Enter a number for its table (1-20): "))
+n = max(1, min(20, n))
+upto = int(input("Show table up to (1-20): "))
+upto = max(1, min(20, upto))
+
+print()
+print(f"  ╔══ Multiplication Table of {n} ══╗")
+print(f"  ║{'─'*28}║")
+for i in range(1, upto+1):
+    result = n * i
+    bar = '█' * min(result, 30)
+    print(f"  ║  {n:2d} × {i:2d} = {result:4d}  {bar}")
+print(f"  ╚{'═'*28}╝")`
+};
+
+function loadEx(key) {
+  takeSnap(true);
+  cm.setValue(EX[key]);
+  cm.clearHistory();
+  outputEl.innerHTML = '';
+  document.getElementById('exec-bar').style.display = 'none';
+  document.getElementById('dd-menu').classList.remove('open');
+  document.getElementById('ex-overlay').classList.remove('open');
+  setTimeout(() => {
+    const last = cm.lastLine();
+    const lastText = cm.getLine(last);
+    if (lastText.trim() !== '') {
+      cm.setCursor({line: last, ch: lastText.length});
+      cm.replaceSelection('\n');
+    } else {
+      cm.setCursor({line: last, ch: 0});
+    }
+    cm.focus(); takeSnap(false);
+  }, 50);
+}
+
+// ── Clear / Reset ──
+function doClear() {
+  takeSnap(true);
+  outputEl.innerHTML = '';
+  document.getElementById('exec-bar').style.display = 'none';
+  sDot.className = 's-dot'; sText.textContent = 'Ready';
+  switchTab('out');
+  takeSnap(false);
+}
+
+function doReset() {
+  takeSnap(true);
+  cm.setValue('');
+  cm.clearHistory();
+  outputEl.innerHTML = '';
+  document.getElementById('exec-bar').style.display = 'none';
+  sDot.className = 's-dot'; sText.textContent = 'Ready';
+  switchTab('out');
+  document.getElementById('s-lines').textContent = 1;
+  takeSnap(false);
+  cm.focus();
+}
+
+// ── Terminal inline input ──
+function getInlineInput(promptText) {
+  return new Promise(resolve => {
+    // Show the prompt text as a complete finished line first
+    if (promptText && promptText.trim()) {
+      const promptLine = document.createElement('span');
+      promptLine.className = 'out-line ok';
+      promptLine.textContent = promptText;
+      outputEl.appendChild(promptLine);
+      outputEl.appendChild(document.createTextNode('\n'));
+    }
+
+    // Then show input field on its own line
+    const wrap = document.createElement('div');
+    wrap.className = 't-line';
+    const arrow = document.createElement('span');
+    arrow.className = 't-prompt';
+    arrow.textContent = '▶ ';
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.className = 't-input';
+    inp.autocomplete = 'off'; inp.spellcheck = false;
+    inp.placeholder = 'enter value and press Enter...';
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        const v = inp.value;
+        inp.disabled = true; inp.style.color = '#FFD43B';
+        resolve(v);
+      }
+    });
+    wrap.appendChild(arrow); wrap.appendChild(inp);
+    outputEl.appendChild(wrap);
+    outputEl.scrollTop = outputEl.scrollHeight;
+    setTimeout(() => inp.focus(), 30);
+  });
+}
+
+function extractInputPrompts(code) {
+  const r = [];
+  // Match input( ... ) properly, handling nested parens inside strings
+  const re = /input\s*\(\s*(["'`])([\s\S]*?)\1\s*\)/g;
+  let m;
+  while ((m = re.exec(code)) !== null) {
+    // m[2] is the string content between the quotes — full prompt text
+    r.push(m[2] || '▶ ');
+  }
+  // Fallback: count bare input() calls with no string arg
+  const bareRe = /input\s*\(\s*\)/g;
+  while ((m = bareRe.exec(code)) !== null) {
+    r.push('▶ ');
+  }
+  return r;
+}
+
+function appendOut(text, cls) {
+  if (!text) return;
+  text.split('\n').forEach((line, i, arr) => {
+    if (i === arr.length-1 && line === '') return;
+    const s = document.createElement('span');
+    // Enhanced error colouring: traceback header, file lines, error type
+    if (cls === 'err') {
+      if (line.startsWith('Traceback')) {
+        s.className = 'out-line err-traceback';
+      } else if (line.trim().startsWith('File ')) {
+        s.className = 'out-line err-file';
+      } else if (line.trim().startsWith('^') || line.trim().match(/^\^+$/)) {
+        s.className = 'out-line err-caret';
+      } else if (line.match(/^\w+Error:/) || line.match(/^\w+Exception:/)) {
+        s.className = 'out-line err-type';
+      } else if (line.trim().startsWith('line ') || line.includes(', line ')) {
+        s.className = 'out-line err-loc';
+      } else {
+        s.className = 'out-line err';
+      }
+    } else {
+      s.className = 'out-line ' + cls;
+    }
+    s.textContent = line;
+    outputEl.appendChild(s);
+    outputEl.appendChild(document.createTextNode('\n'));
+  });
+  outputEl.scrollTop = outputEl.scrollHeight;
+}
+
+// ── Pyodide ──
+let pyodide = null, pyReady = false;
+
+async function initPyodide() {
+  const msg = document.getElementById('load-msg');
+  msg.textContent = 'Loading Python engine...';
+  try {
+    pyodide = await loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.27.0/full/' });
+    pyReady = true;
+    sDot.className = 's-dot'; sText.textContent = 'Ready';
+    outputEl.innerHTML = '<div class="placeholder"><span>Python engine ready</span><span style="font-size:10px">Press Ctrl+Enter or tap Run</span></div>';
+    document.getElementById('loading-overlay').classList.add('hidden');
+    setTimeout(() => document.getElementById('loading-overlay').remove(), 500);
+  } catch(e) {
+    msg.textContent = 'Failed to load Python engine';
+    sDot.className = 's-dot error'; sText.textContent = 'Error';
+  }
+}
+
+// ── Run Code ──
+let isRunning = false;
+
+async function runCode() {
+  const code = cm.getValue().trim();
+  if (!code || isRunning) return;
+  if (!pyReady) {
+    outputEl.innerHTML = '<div class="placeholder">Python engine is still loading...</div>';
+    return;
+  }
+
+  isRunning = true;
+  setRunBtns('<span class="spin"></span> Running...', true);
+  sDot.className = 's-dot running'; sText.textContent = 'Running...';
+  document.getElementById('exec-bar').style.display = 'none';
+  outputEl.innerHTML = '';
+
+  const t0 = Date.now();
+  let hasErr = false;
+
+  try {
+    // Collect inputs inline
+    const prompts = extractInputPrompts(code);
+    const inputs  = [];
+    for (const p of prompts) inputs.push(await getInlineInput(p));
+
+    // ── Run in a completely fresh namespace every time ──
+    // This means x=5 from run 1 is invisible in run 2
+    pyodide.runPython(`
+import sys, io, builtins
+
+_o = io.StringIO()
+_e = io.StringIO()
+sys.stdout = _o
+sys.stderr = _e
+`);
+
+    // Patch input() if needed
+    if (inputs.length > 0) {
+      pyodide.globals.set('_iv', inputs);
+      pyodide.runPython(`
+_ii = 0
+_il = list(_iv)
+def _pi(p=''):
+    global _ii
+    v = _il[_ii] if _ii < len(_il) else ''
+    _ii += 1
+    return v
+builtins.input = _pi
+`);
+    } else {
+      // Make sure input is untouched (restore default if previously patched)
+      pyodide.runPython(`builtins.input = input`);
+    }
+
+    // Run user code in a fresh isolated dict — no shared state between runs
+    pyodide.globals.set('_user_code', code);
+    await pyodide.runPythonAsync(`
+_ns = {'__builtins__': __builtins__}
+try:
+    exec(_user_code, _ns)
+except SystemExit:
+    pass
+`);
+
+    const so = pyodide.runPython(`_o.getvalue()`);
+    const se = pyodide.runPython(`_e.getvalue()`);
+    if (so) appendOut(so, 'ok');
+    if (se) { appendOut(se, 'err'); hasErr = true; }
+    if (!so && !se && inputs.length === 0) appendOut('(no output)', 'sys');
+
+  } catch(err) {
+    hasErr = true;
+    let msg = '';
+    try {
+      // Grab any stderr captured before the crash
+      let se = '';
+      try { se = pyodide.runPython(`_e.getvalue()`); } catch(_) {}
+
+      msg = (err.message || String(err));
+
+      // Prepend captured stderr if any
+      if (se && se.trim()) msg = se.trim() + '\n' + msg;
+
+      // Strip Pyodide JS wrapper noise — keep only from Traceback / Error line
+      const clean = msg.replace(/^[\s\S]*?(Traceback|(?:\w+Error|\w+Exception|SyntaxError|IndentationError):)/m, '$1').trim();
+      msg = clean || msg;
+
+    } catch(_) {
+      msg = String(err);
+    }
+    appendOut(msg, 'err');
+  } finally {
+    try { pyodide.runPython(`import sys\nsys.stdout=sys.__stdout__\nsys.stderr=sys.__stderr__`); } catch(_) {}
+
+    const elapsed = ((Date.now()-t0)/1000).toFixed(2);
+    sDot.className = 's-dot' + (hasErr ? ' error' : '');
+    sText.textContent = hasErr ? 'Error' : 'Done';
+    switchTab(hasErr ? 'err' : 'out');
+    const eb = document.getElementById('exec-bar');
+    eb.style.display = 'flex';
+    document.getElementById('exec-text').textContent = `Executed in ${elapsed}s · ${cm.lineCount()} lines`;
+
+    takeSnap(true);
+    isRunning = false;
+    setRunBtns('▶ Run Code', false);
+    // Also fix mobile button label
+    const mb = document.getElementById('mob-run-btn');
+    if (mb) { mb.innerHTML = '▶ Run'; mb.disabled = false; }
+  }
+}
+
+// ── Visual viewport fix for Android keyboard ──
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => {
+    document.body.style.height = window.visualViewport.height + 'px';
+    cm.refresh();
+  });
+}
+
+// ── Service Worker (offline caching) ──
+if ('serviceWorker' in navigator) {
+  const sw = `
+const C='pyc-v2';
+const URLS=['https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css','https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css','https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js','https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js','https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js','https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js'];
+self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(URLS).catch(()=>{}))); self.skipWaiting();});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==C).map(k=>caches.delete(k))))); self.clients.claim();});
+self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).then(res=>{const cl=res.clone();caches.open(C).then(c=>c.put(e.request,cl));return res;}).catch(()=>new Response('',{status:503}))));});
+`;
+  try {
+    const blob = new Blob([sw], {type:'application/javascript'});
+    navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{});
+  } catch(_) {}
+}
+
+// ── Install prompt ──
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault(); deferredPrompt = e;
+  // Show subtle install option in status bar
+  const sb = document.querySelector('.statusbar');
+  if (sb && !sb.querySelector('.install-hint')) {
+    const h = document.createElement('span');
+    h.className = 'install-hint';
+    h.style.cssText = 'cursor:pointer;color:var(--accent);margin-left:auto;font-size:10px;';
+    h.textContent = '⬇ Install App';
+    h.onclick = () => { deferredPrompt.prompt(); deferredPrompt=null; h.remove(); };
+    sb.appendChild(h);
+  }
+});
+
+// ── Init ──
+initPyodide();
+setTimeout(() => {
+  const last = cm.lastLine();
+  const lastLineText = cm.getLine(last);
+  // If the last line is not already empty, add a new line and put cursor there
+  if (lastLineText.trim() !== '') {
+    cm.setCursor({line: last, ch: lastLineText.length});
+    cm.replaceSelection('\n');
+  } else {
+    cm.setCursor({line: last, ch: 0});
+  }
+  cm.focus();
+  takeSnap(false);
+}, 100);
+</script>
+</body>
+</html>
